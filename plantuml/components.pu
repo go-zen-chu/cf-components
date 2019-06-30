@@ -42,7 +42,7 @@ package orchestrating {
     node api {
         card cloud_controller
         card route_registrar as api.route_registrar
-        card statsd_injector
+        card statsd_injector as api.statsd_injector
         card file_server
         card routing_api
         card policy_server
@@ -58,7 +58,7 @@ package orchestrating {
         card auctioneer
         card cloud_controller_clock
         card cc_deployment_updater
-        card statsd_injector
+        card statsd_injector as scheduler.statsd_injector
         card tps
         card ssh_proxy
         card log_cache_scheduler 
@@ -68,7 +68,7 @@ package orchestrating {
 node uaa {
     card uaa as uaa.uaa
     card route_registrar as uaa.route_registrar
-    card statsd_injector
+    card statsd_injector as uaa.statsd_injector
     agent loggregator_agent as uaa.loggregator_agent
 }
 ' secret management
@@ -143,6 +143,10 @@ cloud_controller -[#blue]down-> pxc_mysql
 uaa.uaa -[#blue]down-> pxc_mysql
 
 'log
+api.statsd_injector -[#green]down-> api.loggregator_agent
+scheduler.statsd_injector -[#green]down-> scheduler.loggregator_agent
+uaa.statsd_injector -[#green]down-> uaa.loggregator_agent
+
 rep -[#green]down-> doppler.doppler
 router.loggregator_agent -[#green]down-> doppler.doppler
 tcp_router.loggregator_agent -[#green]down-> doppler.doppler
@@ -151,6 +155,10 @@ diego_cell.loggregator_agent -[#green]down-> doppler.doppler
 uaa.loggregator_agent -[#green]down-> doppler.doppler
 api.loggregator_agent -[#green]down-> doppler.doppler
 database.loggregator_agent -[#green]down-> doppler.doppler
+
+doppler.doppler -[#green]down-> reverse_log_proxy
+reverse_log_proxy -[#green]down-> log_cache
+doppler.doppler -[#green]down-> loggregator_trafficcontroller
 
 
 ' layout
@@ -161,20 +169,5 @@ routing -[hidden]down-> orchestrating
 routing -[hidden]down-> log
 computing -[hidden]down-> orchestrating
 computing -[hidden]down-> nats
-
-' router -[hidden]down-> tcp_router
-' api -[hidden]down-> cc_worker
-' cc_worker -[hidden]down-> scheduler
-' router -[hidden]right-> diego_cell
-' router -[hidden]right-> api
-' router -[hidden]right-> uaa
-
-' diego_cell -[hidden]down-> api
-' api -[hidden]down-> cc_worker
-' cc_worker -[hidden]down-> uaa
-
-' diego_cell -[hidden]right-> database
-' api -[hidden]right-> database
-'uaa -[hidden]right-> database
 
 @enduml
