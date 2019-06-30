@@ -142,8 +142,10 @@ bbs -[#brown]down-> rep
 ' DB
 bbs -[#blue]down-> pxc_mysql
 cloud_controller -[#blue]down-> pxc_mysql
+locket -[#blue]down-> pxc_mysql
 uaa.uaa -[#blue]down-> pxc_mysql
 credhub.credhub -[#blue]down-> pxc_mysql
+routing_api -[#blue]down-> pxc_mysql
 
 ' secret
 cloud_controller -[#olive]down-> credhub.credhub
