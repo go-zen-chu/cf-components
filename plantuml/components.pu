@@ -1,0 +1,180 @@
+@startuml
+
+title cf components
+left to right direction
+
+package routing {
+    node router {
+        card gorouter
+        card loggr_udp_forwarder as router.loggr_udp_forwarder
+        agent loggregator_agent as router.loggregator_agent
+    }
+    node tcp_router {
+        card tcp_router as tcp_router.tcp_router
+        card loggr_udp_forwarder as tcp_router.loggr_udp_forwarder
+        agent loggregator_agent as tcp_router.loggregator_agent
+    }
+}
+' computing
+package computing {
+    node diego_cell {
+        node garden {
+            card gdn
+            card runc
+        }
+        card rep
+        card route_emitter
+        card garden_cni
+        card silk_daemon
+        card silk_cni
+        agent loggregator_agent as diego_cell.loggregator_agent
+    }
+    node diego_api {
+        card bbs
+        card silk_controller
+        card locket
+        agent loggregator_agent as diego_api.loggregator_agent
+    }
+
+}
+' control
+package orchestrating {
+    node api {
+        card cloud_controller
+        card route_registrar as api.route_registrar
+        card statsd_injector
+        card file_server
+        card routing_api
+        card policy_server
+        card policy_server_internal
+        card cc_uploader
+        agent loggregator_agent as api.loggregator_agent
+    }
+    node cc_worker {
+        card cloud_controller_worker
+    }
+    node scheduler {
+        card scheduler as scheduler.scheduler
+        card auctioneer
+        card cloud_controller_clock
+        card cc_deployment_updater
+        card statsd_injector
+        card tps
+        card ssh_proxy
+        card log_cache_scheduler 
+    }
+}
+' IAM
+node uaa {
+    card uaa as uaa.uaa
+    card route_registrar as uaa.route_registrar
+    card statsd_injector
+    agent loggregator_agent as uaa.loggregator_agent
+}
+' secret management
+node credhub {
+    card credhub as credhub.credhub
+}
+' queue
+queue nats {
+    card nats as nats.nats
+}
+' db
+database database as db {
+    card pxc_mysql
+    card proxy
+    card galera_agent
+    card route_registrar as database.route_registrar
+    agent loggregator_agent as database.loggregator_agent
+}
+database singleton_blobstore {
+    card blobstore
+    card route_registrar
+}
+
+package log {
+    node adapter {
+        card adapter as adapter.adapter
+    }
+    node doppler {
+        card doppler as doppler.doppler
+        card log_cache
+        card log_cache_gateway
+        card log_cache_expvar_forwarder
+        card route_registrar
+        card log_cache_cf_auth_proxy
+    }
+    node log_api {
+        card loggregator_trafficcontroller
+        card reverse_log_proxy
+        card reverse_log_proxy_gateway
+        card route_registrar as log_api.route_registrar
+    }
+}
+
+' routing
+interface client_request
+client_request -[#red]down-> gorouter
+client_request -[#red]down-> tcp_router.tcp_router
+
+gorouter -[#red]down-> cloud_controller :  request to cc (cf commands)
+gorouter -[#red]down-> uaa.uaa : request to uaa (login.....)
+gorouter -[#red]down-> runc : request to app container
+tcp_router.tcp_router -[#red]down-> runc : request to app container
+gorouter -[#red]down-> loggregator_trafficcontroller : request to TC
+gorouter -[#red]down-> reverse_log_proxy : request to RLP
+
+route_emitter -[#magenta]down-> nats.nats
+uaa.route_registrar -[#magenta]down-> nats.nats
+api.route_registrar -[#magenta]down-> nats.nats
+log_api.route_registrar -[#magenta]up-> nats.nats
+database.route_registrar -[#magenta]down-> nats.nats
+nats.nats .[#magenta]up.> gorouter
+routing_api .[#magenta]up.> gorouter
+routing_api .[#magenta]up.> tcp_router.tcp_router
+
+' computing
+cloud_controller -[#brown]down-> bbs
+bbs -[#brown]down-> auctioneer
+bbs -[#brown]down-> rep
+
+bbs -[#blue]down-> pxc_mysql
+cloud_controller -[#blue]down-> pxc_mysql
+uaa.uaa -[#blue]down-> pxc_mysql
+
+'log
+rep -[#green]down-> doppler.doppler
+router.loggregator_agent -[#green]down-> doppler.doppler
+tcp_router.loggregator_agent -[#green]down-> doppler.doppler
+diego_api.loggregator_agent -[#green]down-> doppler.doppler
+diego_cell.loggregator_agent -[#green]down-> doppler.doppler
+uaa.loggregator_agent -[#green]down-> doppler.doppler
+api.loggregator_agent -[#green]down-> doppler.doppler
+database.loggregator_agent -[#green]down-> doppler.doppler
+
+
+' layout
+client_request -[hidden]down-> routing
+routing -[hidden]down-> computing
+routing -[hidden]down-> uaa
+routing -[hidden]down-> orchestrating
+routing -[hidden]down-> log
+computing -[hidden]down-> orchestrating
+computing -[hidden]down-> nats
+
+' router -[hidden]down-> tcp_router
+' api -[hidden]down-> cc_worker
+' cc_worker -[hidden]down-> scheduler
+' router -[hidden]right-> diego_cell
+' router -[hidden]right-> api
+' router -[hidden]right-> uaa
+
+' diego_cell -[hidden]down-> api
+' api -[hidden]down-> cc_worker
+' cc_worker -[hidden]down-> uaa
+
+' diego_cell -[hidden]right-> database
+' api -[hidden]right-> database
+'uaa -[hidden]right-> database
+
+@enduml
